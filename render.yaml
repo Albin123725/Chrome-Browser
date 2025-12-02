@@ -1,53 +1,23 @@
 services:
   - type: web
-    name: chrome-cloud-rdp
+    name: chrome-persistent
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    
-    # Specify the primary port (Port 80 for web access)
     port: 80
     
-    # Environment variables with auto-generated passwords
     envVars:
-      # Display settings
-      - key: DISPLAY_WIDTH
-        value: "1280"
-      - key: DISPLAY_HEIGHT  
-        value: "720"
-      - key: DISPLAY
-        value: ":99"
-        
-      # Security (auto-generated passwords)
-      - key: VNC_PASSWORD
-        generateValue: true
-      - key: AUTH_USER
-        value: "admin"
-      - key: AUTH_PASS
-        generateValue: true
-        
-      # Chrome optimization
+      # Keep Chrome running settings
       - key: CHROME_FLAGS
-        value: "--no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,720 --start-maximized"
-        
-      # Features
-      - key: ENABLE_NO_VNC
-        value: "true"
-      - key: ENABLE_AUTH
-        value: "false"  # Disable auth for easier access
-      - key: NO_VNC_PORT
-        value: "6080"
-        
-      # Your Colab notebook pre-loaded
+        value: "--no-sandbox --disable-dev-shm-usage --disable-gpu --remote-debugging-port=9222 --window-size=1280,720 --start-maximized --user-data-dir=/data/chrome --no-first-run --no-default-browser-check --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-ipc-flooding-protection"
+      
       - key: STARTUP_URL
         value: "https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing"
-        
-    # Health check
+      
+      - key: KEEP_ALIVE_INTERVAL
+        value: "300"  # Check every 5 minutes
+    
+    # Auto-restart if crashes
     healthCheckPath: /health
-    healthCheckTimeout: 10
-    
-    # Auto deployment
+    healthCheckTimeout: 30
     autoDeploy: true
-    
-    # Render will expose port 80 to the internet
-    # Other ports (5900, 6080) are internal only
