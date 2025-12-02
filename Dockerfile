@@ -78,3 +78,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Start the service
 CMD ["/start.sh"]
+# ... existing Dockerfile content ...
+
+# Copy keep-alive script
+COPY keep-alive.sh /keep-alive.sh
+RUN chmod +x /keep-alive.sh
+
+# Add startup command to start keep-alive
+CMD ["bash", "-c", "/start.sh & /keep-alive.sh"]
