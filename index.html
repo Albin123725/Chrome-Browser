@@ -1,322 +1,40 @@
-<!DOCTYPE html>
-<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chrome Browser with Colab</title>
+    <!-- Local CSS -->
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- CDN Fallback -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" 
+          integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" 
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>">
+    
+    <!-- Inline critical CSS as fallback -->
+    <style>
+        /* Critical CSS to prevent FOUC */
+        body { 
+            margin: 0; 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background: #202124; 
+            color: #fff; 
+        }
+        .browser-container { display: flex; flex-direction: column; height: 100vh; }
+        .window-controls { background: linear-gradient(to right, #4285f4, #34a853); padding: 8px; }
+        .browser-header { background: #292a2d; padding: 8px; display: flex; align-items: center; }
+        #url-bar { background: #35363a; border: none; color: white; padding: 8px; border-radius: 20px; flex: 1; }
+        .bookmarks-bar { background: #292a2d; padding: 4px; }
+        .tabs-container { background: #292a2d; padding: 4px; }
+        .new-tab-page { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; height: 100%; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
+        .ntp-logo { text-align: center; margin-bottom: 40px; }
+        .ntp-search-box { background: rgba(255,255,255,0.1); border-radius: 30px; padding: 16px; width: 600px; max-width: 90%; }
+        .colab-btn { background: #FFA500; color: white; border: none; padding: 12px 24px; border-radius: 12px; cursor: pointer; }
+        .status-bar { background: #292a2d; padding: 8px; display: flex; justify-content: space-between; }
+        
+        /* Loading fallback */
+        #webview-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #202124; display: flex; align-items: center; justify-content: center; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #3c4043; border-top-color: #4285f4; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
 </head>
-<body>
-    <div class="browser-container">
-        <!-- Window Controls -->
-        <div class="window-controls">
-            <div class="window-buttons">
-                <button class="window-btn close">
-                    <i class="fas fa-times"></i>
-                </button>
-                <button class="window-btn minimize">
-                    <i class="fas fa-minus"></i>
-                </button>
-                <button class="window-btn maximize">
-                    <i class="fas fa-square"></i>
-                </button>
-            </div>
-            
-            <div class="window-title">
-                <i class="fas fa-globe-americas"></i>
-                <span id="window-title-text">Chrome Browser</span>
-            </div>
-        </div>
-
-        <!-- Browser Header -->
-        <div class="browser-header">
-            <div class="nav-controls">
-                <button id="btn-back" class="nav-btn" title="Back">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
-                <button id="btn-forward" class="nav-btn" title="Forward">
-                    <i class="fas fa-arrow-right"></i>
-                </button>
-                <button id="btn-reload" class="nav-btn" title="Reload">
-                    <i class="fas fa-redo"></i>
-                </button>
-                <button id="btn-home" class="nav-btn" title="Home">
-                    <i class="fas fa-home"></i>
-                </button>
-            </div>
-
-            <div class="url-container">
-                <div class="url-input-wrapper">
-                    <i class="fas fa-lock url-icon" id="security-icon"></i>
-                    <input type="text" id="url-bar" 
-                           placeholder="Search Google or type a URL (or 'mycolab' for your notebook)"
-                           autocomplete="off"
-                           spellcheck="false">
-                    <div class="url-actions">
-                        <button id="btn-favorite" class="url-action-btn" title="Bookmark">
-                            <i class="far fa-star"></i>
-                        </button>
-                        <button id="btn-clear" class="url-action-btn" title="Clear">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                </div>
-                <div id="search-suggestions" class="search-suggestions"></div>
-            </div>
-
-            <div class="header-actions">
-                <button id="btn-colab" class="action-btn" title="Open Google Colab">
-                    <i class="fab fa-google"></i>
-                </button>
-                <button id="btn-history" class="action-btn" title="History">
-                    <i class="fas fa-history"></i>
-                </button>
-                <button id="btn-downloads" class="action-btn" title="Downloads">
-                    <i class="fas fa-download"></i>
-                </button>
-                <button id="btn-settings" class="action-btn" title="Settings">
-                    <i class="fas fa-cog"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Bookmarks Bar -->
-        <div class="bookmarks-bar">
-            <div class="bookmarks-container">
-                <button class="bookmark" data-url="https://www.google.com">
-                    <i class="fab fa-google"></i>
-                    <span>Google</span>
-                </button>
-                <button class="bookmark" data-url="https://www.youtube.com">
-                    <i class="fab fa-youtube"></i>
-                    <span>YouTube</span>
-                </button>
-                <button class="bookmark" data-url="https://github.com">
-                    <i class="fab fa-github"></i>
-                    <span>GitHub</span>
-                </button>
-                <button class="bookmark" data-url="https://colab.research.google.com">
-                    <i class="fab fa-google"></i>
-                    <span>Colab</span>
-                </button>
-                <button class="bookmark" id="my-colab-btn" data-url="https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing">
-                    <i class="fas fa-user"></i>
-                    <span>My Colab</span>
-                </button>
-                <button class="bookmark" data-url="https://chat.openai.com">
-                    <i class="fas fa-robot"></i>
-                    <span>ChatGPT</span>
-                </button>
-                <button class="bookmark" id="btn-add-bookmark" title="Add Bookmark">
-                    <i class="fas fa-plus"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Tabs Bar -->
-        <div class="tabs-container">
-            <div class="tabs-list" id="tabs-list">
-                <div class="tab active" data-tab-id="1">
-                    <div class="tab-content">
-                        <i class="fas fa-home tab-icon"></i>
-                        <span class="tab-title">New Tab</span>
-                    </div>
-                    <button class="tab-close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            </div>
-            <button id="btn-new-tab" class="new-tab-btn" title="New Tab">
-                <i class="fas fa-plus"></i>
-            </button>
-        </div>
-
-        <!-- Main Content Area -->
-        <div class="main-content">
-            <!-- New Tab Page -->
-            <div id="new-tab-page" class="new-tab-page active">
-                <div class="ntp-header">
-                    <div class="ntp-logo">
-                        <i class="fas fa-globe-americas"></i>
-                        <h1>Chrome Browser</h1>
-                        <span class="version">v1.2.0</span>
-                    </div>
-                    <p class="ntp-subtitle">Advanced web browser with Google Colab integration</p>
-                </div>
-
-                <!-- Search Box -->
-                <div class="ntp-search-container">
-                    <div class="ntp-search-box">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="ntp-search" 
-                               placeholder="Search Google or type a URL"
-                               autocomplete="off">
-                        <button id="ntp-search-btn" class="ntp-search-btn">
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Google Colab Integration -->
-                <div class="ntp-colab">
-                    <h3><i class="fab fa-google"></i> Google Colab Integration</h3>
-                    <div class="colab-container">
-                        <div class="colab-input-group">
-                            <input type="text" id="colab-url" 
-                                   placeholder="Paste Colab, GitHub, or Drive notebook URL">
-                            <button id="colab-open" class="colab-btn">
-                                <i class="fas fa-external-link-alt"></i> Open Notebook
-                            </button>
-                        </div>
-                        
-                        <!-- My Personal Notebook -->
-                        <div class="personal-notebook-card">
-                            <div class="personal-notebook-header">
-                                <i class="fas fa-user-circle"></i>
-                                <h4>Your Personal Colab Notebook</h4>
-                            </div>
-                            <div class="personal-notebook-info">
-                                <p><strong>URL:</strong> https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1</p>
-                                <p><i class="fas fa-clock"></i> Last opened: <span id="last-opened">Never</span></p>
-                            </div>
-                            <div class="personal-notebook-actions">
-                                <button id="open-my-notebook" class="colab-btn">
-                                    <i class="fas fa-play"></i> Open My Notebook
-                                </button>
-                                <button id="copy-notebook-url" class="colab-btn secondary">
-                                    <i class="fas fa-copy"></i> Copy URL
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Colab Templates -->
-                        <div class="colab-templates">
-                            <h4>Quick Templates:</h4>
-                            <div class="colab-template-grid">
-                                <div class="colab-template" data-url="https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing">
-                                    <i class="fas fa-user"></i>
-                                    <span>My Notebook</span>
-                                </div>
-                                <div class="colab-template" data-url="https://colab.research.google.com/github/googlecolab/colabtools/blob/master/notebooks/colab-github-demo.ipynb">
-                                    <i class="fas fa-star"></i>
-                                    <span>Colab Demo</span>
-                                </div>
-                                <div class="colab-template" data-url="https://colab.research.google.com/github/tensorflow/docs/blob/master/site/en/tutorials/quickstart/beginner.ipynb">
-                                    <i class="fas fa-brain"></i>
-                                    <span>TensorFlow</span>
-                                </div>
-                                <div class="colab-template" data-url="https://colab.research.google.com/github/pytorch/tutorials/blob/master/beginner_source/basics/quickstart_tutorial.ipynb">
-                                    <i class="fas fa-robot"></i>
-                                    <span>PyTorch</span>
-                                </div>
-                                <div class="colab-template" data-url="colab.new">
-                                    <i class="fas fa-plus"></i>
-                                    <span>New Notebook</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="colab-info">
-                            <p><i class="fas fa-info-circle"></i> Type "mycolab" in address bar to quickly open your notebook. Use Ctrl+Alt+C shortcut.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quick Links -->
-                <div class="ntp-quick-links">
-                    <h3>Quick Links</h3>
-                    <div class="quick-links-grid">
-                        <div class="quick-link-card" data-url="https://www.google.com">
-                            <div class="quick-link-icon">
-                                <i class="fab fa-google"></i>
-                            </div>
-                            <span class="quick-link-title">Google</span>
-                        </div>
-                        <div class="quick-link-card" data-url="https://www.youtube.com">
-                            <div class="quick-link-icon">
-                                <i class="fab fa-youtube"></i>
-                            </div>
-                            <span class="quick-link-title">YouTube</span>
-                        </div>
-                        <div class="quick-link-card" data-url="https://github.com">
-                            <div class="quick-link-icon">
-                                <i class="fab fa-github"></i>
-                            </div>
-                            <span class="quick-link-title">GitHub</span>
-                        </div>
-                        <div class="quick-link-card" data-url="https://colab.research.google.com">
-                            <div class="quick-link-icon" style="background: linear-gradient(135deg, #FFA500, #FF8C00);">
-                                <i class="fab fa-google"></i>
-                            </div>
-                            <span class="quick-link-title">Colab</span>
-                        </div>
-                        <div class="quick-link-card" data-url="https://chat.openai.com">
-                            <div class="quick-link-icon">
-                                <i class="fas fa-robot"></i>
-                            </div>
-                            <span class="quick-link-title">ChatGPT</span>
-                        </div>
-                        <div class="quick-link-card" data-url="https://www.wikipedia.org">
-                            <div class="quick-link-icon">
-                                <i class="fab fa-wikipedia-w"></i>
-                            </div>
-                            <span class="quick-link-title">Wikipedia</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ntp-footer">
-                    <p>Chrome Browser v1.2.0 | Google Colab Integrated | Deployed on Render</p>
-                    <p>Your notebook: https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1</p>
-                </div>
-            </div>
-
-            <!-- WebView Container -->
-            <div id="webview-container" class="webview-container">
-                <iframe id="webview" class="webview" 
-                        frameborder="0" 
-                        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"
-                        allow="accelerometer; autoplay; camera; encrypted-media; geolocation; gyroscope; microphone; midi; payment; vr; xr-spatial-tracking"
-                        referrerpolicy="no-referrer-when-downgrade">
-                </iframe>
-                <div id="webview-overlay" class="webview-overlay">
-                    <div class="loading-indicator">
-                        <div class="spinner"></div>
-                        <p id="loading-text">Loading page...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Status Bar -->
-        <div class="status-bar">
-            <div class="status-info">
-                <span id="status-text" class="status-text">Ready</span>
-                <span id="page-info" class="page-info"></span>
-            </div>
-            <div class="status-controls">
-                <button id="btn-zoom-out" class="status-btn" title="Zoom Out">
-                    <i class="fas fa-search-minus"></i>
-                </button>
-                <button id="btn-zoom-reset" class="status-btn" title="Reset Zoom">
-                    <span id="zoom-level">100%</span>
-                </button>
-                <button id="btn-zoom-in" class="status-btn" title="Zoom In">
-                    <i class="fas fa-search-plus"></i>
-                </button>
-                <button id="btn-fullscreen" class="status-btn" title="Fullscreen">
-                    <i class="fas fa-expand"></i>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast Notification -->
-    <div id="toast" class="toast"></div>
-
-    <script src="script.js"></script>
-</body>
-</html>
