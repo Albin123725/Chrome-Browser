@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  chrome-rdp:
+    build: .
+    container_name: chrome-rdp
+    environment:
+      - DISPLAY_WIDTH=1920
+      - DISPLAY_HEIGHT=1080
+      - VNC_PASSWORD=chrome123
+      - ENABLE_NO_VNC=true
+    ports:
+      - "8080:80"     # Web interface
+      - "5900:5900"   # VNC port
+    volumes:
+      - ./user-data:/data
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
