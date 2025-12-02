@@ -1,68 +1,84 @@
 #!/bin/bash
 
 echo "========================================="
-echo "Starting Chrome Cloud RDP"
+echo "Starting Chrome Cloud RDP - Persistent Mode"
 echo "========================================="
 
-# Load environment variables with defaults
+# Set environment variables
 DISPLAY_WIDTH=${DISPLAY_WIDTH:-1280}
 DISPLAY_HEIGHT=${DISPLAY_HEIGHT:-720}
 VNC_PASSWORD=${VNC_PASSWORD:-chrome123}
-ENABLE_AUTH=${ENABLE_AUTH:-false}
-AUTH_USER=${AUTH_USER:-admin}
-AUTH_PASS=${AUTH_PASS:-admin123}
-STARTUP_URL=${STARTUP_URL:-https://colab.research.google.com}
+STARTUP_URL=${STARTUP_URL:-https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing}
 
-echo "Configuration:"
-echo "- Display: ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}"
-echo "- VNC Password: ${VNC_PASSWORD:0:3}**** (set via env)"
-echo "- Auth Enabled: ${ENABLE_AUTH}"
-echo "- Startup URL: ${STARTUP_URL}"
-echo ""
-
-# Set VNC password if provided
-if [ -n "$VNC_PASSWORD" ] && [ "$VNC_PASSWORD" != "chrome123" ]; then
-    echo "Setting VNC password..."
-    mkdir -p ~/.vnc
-    x11vnc -storepasswd "$VNC_PASSWORD" ~/.vnc/passwd
-fi
-
-# Set up HTTP authentication if enabled
-if [ "$ENABLE_AUTH" = "true" ]; then
-    echo "Setting up HTTP authentication..."
-    htpasswd -bc /etc/nginx/.htpasswd "$AUTH_USER" "$AUTH_PASS"
-    sed -i 's/# auth_basic/auth_basic/g' /etc/nginx/nginx.conf
-    sed -i 's/# auth_basic_user_file/auth_basic_user_file/g' /etc/nginx/nginx.conf
-fi
-
-# Create Chrome data directory with proper permissions
-echo "Setting up Chrome data directory..."
-mkdir -p /data/chrome /data/downloads
-chown -R chrome:chrome /data
-
-# Update Chrome flags with display size
-export CHROME_FLAGS="--user-data-dir=/data/chrome --no-first-run --no-default-browser-check --disable-sync --disable-blink-features=AutomationControlled --window-size=${DISPLAY_WIDTH},${DISPLAY_HEIGHT}"
-
-# Set display environment
+# Start Xvfb (virtual display)
+Xvfb :99 -screen 0 ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}x24 -ac +extension GLX +render -noreset &
 export DISPLAY=:99
 
-# Create startup script for Chrome
-if [ -n "$STARTUP_URL" ]; then
-    cat > /home/chrome/startup.sh << EOF
-#!/bin/bash
-sleep 3
-# Open startup URL
-google-chrome-stable --no-sandbox --disable-dev-shm-usage "$STARTUP_URL" &
-# Open new tab with helpful links
-sleep 5
-google-chrome-stable --new-window "https://www.google.com" "https://github.com" "https://colab.research.google.com" &
-EOF
-    chmod +x /home/chrome/startup.sh
-    chown chrome:chrome /home/chrome/startup.sh
-fi
+# Start Fluxbox (window manager)
+fluxbox &
 
-echo "Starting services via Supervisor..."
-echo ""
+# Start VNC server
+x11vnc -display :99 -forever -shared -nopw -listen localhost -xkb &
 
-# Start Supervisor (which starts all services)
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+# Start Chrome in HEADLESS MODE for background tasks
+echo "Starting Chrome in persistent mode..."
+google-chrome-stable \
+  --no-sandbox \
+  --disable-dev-shm-usage \
+  --disable-gpu \
+  --remote-debugging-port=9222 \
+  --window-size=${DISPLAY_WIDTH},${DISPLAY_HEIGHT} \
+  --start-maximized \
+  --user-data-dir=/data/chrome \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-sync \
+  --disable-background-timer-throttling \
+  --disable-renderer-backgrounding \
+  --disable-backgrounding-occluded-windows \
+  --disable-ipc-flooding-protection \
+  --enable-logging \
+  --v=1 \
+  "$STARTUP_URL" &
+
+# Save Chrome PID to keep it running
+CHROME_PID=$!
+echo "Chrome started with PID: $CHROME_PID"
+
+# Function to keep Chrome alive
+keep_chrome_alive() {
+    while true; do
+        if ! kill -0 $CHROME_PID 2>/dev/null; then
+            echo "Chrome crashed, restarting..."
+            google-chrome-stable \
+                --no-sandbox \
+                --disable-dev-shm-usage \
+                --disable-gpu \
+                --remote-debugging-port=9222 \
+                --window-size=${DISPLAY_WIDTH},${DISPLAY_HEIGHT} \
+                --start-maximized \
+                --user-data-dir=/data/chrome \
+                "$STARTUP_URL" &
+            CHROME_PID=$!
+            echo "Chrome restarted with PID: $CHROME_PID"
+        fi
+        
+        # Check if any tab is running Colab
+        curl -s http://localhost:9222/json/list | grep -q "colab.research.google.com" \
+            && echo "Colab notebook is running..." \
+            || echo "No Colab tabs found"
+        
+        sleep 30
+    done
+}
+
+# Start Chrome monitor in background
+keep_chrome_alive &
+
+# Start noVNC (web interface)
+websockify --web /usr/share/novnc/ 6080 localhost:5900 &
+
+# Start Nginx
+nginx -g "daemon off;"
+
+echo "Setup complete! Chrome will continue running even when you disconnect."
