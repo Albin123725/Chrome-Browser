@@ -1,18 +1,16 @@
-const express = require('express');
-const path = require('path');
-const fetch = require('node-fetch');
-const compression = require('compression');
-const app = express();
+import express from 'express';
+import path from 'path';
+import fetch from 'node-fetch';
+import { fileURLToPath } from 'url';
 
+// Get __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Get the current directory
-const __dirname = path.resolve();
-
 // Middleware
-app.use(compression());
-
-// Serve static files from current directory
 app.use(express.static(__dirname));
 app.use(express.json());
 
@@ -40,7 +38,7 @@ app.get('/api/proxy', async (req, res) => {
         });
 
         const contentType = response.headers.get('content-type') || 'text/html';
-        let html = await response.text();
+        const html = await response.text();
         
         res.set('Content-Type', contentType);
         res.send(html);
@@ -142,25 +140,16 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Serve all other routes with index.html (for SPA)
+// Serve all other routes with index.html
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Error handler
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({
-        error: 'Something went wrong!',
-        message: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
 });
 
 // Start server
 app.listen(PORT, () => {
     console.log(`
     🚀 Web Browser App is running!
-    🌐 Local: http://localhost:${PORT}
+    🌐 URL: https://chrome-browser-4ct2.onrender.com
     📁 Files served from: ${__dirname}
     `);
 });
