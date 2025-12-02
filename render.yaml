@@ -1,11 +1,22 @@
 services:
   - type: web
-    name: web-browser
+    name: web-browser-app
     env: node
+    region: ohio  # or singapore, oregon, frankfurt
+    plan: free
     buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
         value: 18.17.0
+      - key: NODE_ENV
+        value: production
     healthCheckPath: /health
     autoDeploy: true
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: ALLOW-FROM https://web-browser-app.onrender.com
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data: blob:; frame-src 'self' https: http: data: blob:;"
