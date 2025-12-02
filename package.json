@@ -1,7 +1,7 @@
 {
   "name": "chrome-browser",
   "version": "1.0.0",
-  "description": "Chrome-like web browser",
+  "description": "Chrome-like web browser with Google Colab integration",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -12,6 +12,9 @@
     "node-fetch": "^3.3.2"
   },
   "engines": {
-    "node": ">=16.0.0"
-  }
+    "node": ">=18.0.0"
+  },
+  "keywords": ["browser", "chrome", "colab", "web-browser"],
+  "author": "Your Name",
+  "license": "MIT"
 }
