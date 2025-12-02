@@ -5,15 +5,56 @@ services:
     build: .
     container_name: chrome-rdp
     environment:
+      # Display settings
       - DISPLAY_WIDTH=1920
       - DISPLAY_HEIGHT=1080
-      - VNC_PASSWORD=chrome123
+      - DISPLAY=:99
+      
+      # Security
+      - VNC_PASSWORD=${VNC_PASSWORD:-chrome123}
+      - ENABLE_AUTH=${ENABLE_AUTH:-false}
+      - AUTH_USER=${AUTH_USER:-admin}
+      - AUTH_PASS=${AUTH_PASS:-admin123}
+      
+      # Chrome settings
+      - CHROME_FLAGS=--no-sandbox --disable-dev-shm-usage --disable-gpu --remote-debugging-port=9222 --window-size=1920,1080 --start-maximized
+      
+      # Performance
       - ENABLE_NO_VNC=true
+      - NO_VNC_PORT=6080
+      
+      # Custom startup URL (optional)
+      - STARTUP_URL=https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing
+      
     ports:
       - "8080:80"     # Web interface
       - "5900:5900"   # VNC port
+      - "6080:6080"   # noVNC port
+      
     volumes:
       - ./user-data:/data
+      - ./config:/config
+      
     restart: unless-stopped
     stdin_open: true
     tty: true
+    mem_limit: 2g
+    cpus: '1.0'
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      
+    networks:
+      - chrome-network
+
+networks:
+  chrome-network:
+    driver: bridge
+
+volumes:
+  user-data:
+  config:
