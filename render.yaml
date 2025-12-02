@@ -1,12 +1,24 @@
 services:
   - type: web
-    name: fast-browser
-    env: node
+    name: chrome-rdp
+    env: docker
     plan: free
-    buildCommand: npm install
-    startCommand: node server.js
+    dockerfilePath: ./Dockerfile
     envVars:
-      - key: NODE_ENV
-        value: production
+      - key: DISPLAY_WIDTH
+        value: "1280"
+      - key: DISPLAY_HEIGHT
+        value: "720"
+      - key: VNC_PASSWORD
+        generateValue: true
+      - key: ENABLE_NO_VNC
+        value: "true"
     healthCheckPath: /health
     autoDeploy: true
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: ALLOW-FROM *
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; frame-ancestors *;"
