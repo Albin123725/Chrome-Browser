@@ -14,10 +14,20 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static(__dirname));
 app.use(express.json());
 
-// Serve main HTML file
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+// Fix Colab iframe issues
+function fixColabContent(html) {
+    // Remove X-Frame-Options and Content-Security-Policy headers from HTML
+    html = html.replace(/<meta[^>]*(?:X-Frame-Options|Content-Security-Policy)[^>]*>/gi, '');
+    
+    // Allow iframe embedding
+    html = html.replace(/<head>/i, '<head><meta name="referrer" content="no-referrer">');
+    
+    // Fix relative URLs
+    html = html.replace(/(src|href)=["'](?!https?:\/\/)(?!data:)(?!\/\/)([^"']+)["']/gi, 
+        (match, attr, value) => `${attr}="https://colab.research.google.com${value.startsWith('/') ? '' : '/'}${value}"`);
+    
+    return html;
+}
 
 // Proxy endpoint for bypassing CORS
 app.get('/api/proxy', async (req, res) => {
@@ -28,19 +38,47 @@ app.get('/api/proxy', async (req, res) => {
     }
 
     try {
+        console.log(`Proxy request for: ${url}`);
+        
+        // Special headers for Colab
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0'
+        };
+        
+        // Add Colab-specific headers
+        if (url.includes('colab.research.google.com')) {
+            headers['Origin'] = 'https://colab.research.google.com';
+            headers['Referer'] = 'https://colab.research.google.com/';
+            headers['Sec-Fetch-Site'] = 'same-origin';
+        }
+
         const response = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-            },
-            timeout: 10000
+            headers: headers,
+            timeout: 15000 // Longer timeout for Colab
         });
 
         const contentType = response.headers.get('content-type') || 'text/html';
-        const html = await response.text();
+        let html = await response.text();
+        
+        // Fix Colab iframe issues
+        if (url.includes('colab.research.google.com')) {
+            html = fixColabContent(html);
+        }
         
         res.set('Content-Type', contentType);
+        res.set('X-Frame-Options', 'ALLOW-FROM https://chrome-browser-4ct2.onrender.com');
+        res.set('Access-Control-Allow-Origin', '*');
         res.send(html);
         
     } catch (error) {
@@ -136,11 +174,17 @@ app.get('/health', (req, res) => {
     res.status(200).json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        service: 'web-browser'
+        service: 'web-browser',
+        version: '1.0.0'
     });
 });
 
-// Serve all other routes with index.html
+// Serve main HTML file
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Serve all other routes with index.html (for SPA)
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -151,5 +195,7 @@ app.listen(PORT, () => {
     🚀 Web Browser App is running!
     🌐 URL: https://chrome-browser-4ct2.onrender.com
     📁 Files served from: ${__dirname}
+    🔧 Proxy server active
+    💾 Google Colab integration enabled
     `);
 });
