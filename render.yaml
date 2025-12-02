@@ -2,15 +2,15 @@ services:
   - type: web
     name: chrome-cloud-rdp
     env: docker
-    region: oregon
     plan: free
     dockerfilePath: ./Dockerfile
-    dockerCommand: ./start.sh
-    dockerContext: .
     
-    # Auto-generated environment variables
+    # Specify the primary port (Port 80 for web access)
+    port: 80
+    
+    # Environment variables with auto-generated passwords
     envVars:
-      # Display settings (auto-detected)
+      # Display settings
       - key: DISPLAY_WIDTH
         value: "1280"
       - key: DISPLAY_HEIGHT  
@@ -26,29 +26,21 @@ services:
       - key: AUTH_PASS
         generateValue: true
         
-      # Chrome optimization for cloud
+      # Chrome optimization
       - key: CHROME_FLAGS
-        value: "--no-sandbox --disable-dev-shm-usage --disable-gpu --remote-debugging-port=9222 --window-size=1280,720 --start-maximized --disable-software-rasterizer --disable-features=VizDisplayCompositor"
+        value: "--no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,720 --start-maximized"
         
       # Features
       - key: ENABLE_NO_VNC
         value: "true"
       - key: ENABLE_AUTH
-        value: "true"
+        value: "false"  # Disable auth for easier access
       - key: NO_VNC_PORT
-        value: "80"
+        value: "6080"
         
       # Your Colab notebook pre-loaded
       - key: STARTUP_URL
         value: "https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing"
-        
-      # Performance optimizations
-      - key: NODE_ENV
-        value: "production"
-      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: "true"
-      - key: CHROMIUM_FLAGS
-        value: "--no-sandbox --disable-setuid-sandbox"
         
     # Health check
     healthCheckPath: /health
@@ -56,38 +48,6 @@ services:
     
     # Auto deployment
     autoDeploy: true
-    branch: main
     
-    # Build settings
-    buildFilter:
-      paths:
-        - Dockerfile
-        - docker-compose.yml
-        - render.yaml
-        - supervisord.conf
-        - start.sh
-        - nginx.conf
-        
-    # Headers for web access
-    headers:
-      - path: /*
-        name: X-Frame-Options
-        value: ALLOW-FROM *
-      - path: /*
-        name: Content-Security-Policy
-        value: "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; frame-ancestors *;"
-      - path: /*
-        name: Cache-Control
-        value: "no-cache, no-store, must-revalidate"
-      - path: /*
-        name: X-Content-Type-Options
-        value: "nosniff"
-        
-    # Resource limits (Free tier)
-    resources:
-      memory:
-        limit: 512MB
-        request: 256MB
-      cpu:
-        limit: 1000m
-        request: 500m
+    # Render will expose port 80 to the internet
+    # Other ports (5900, 6080) are internal only
