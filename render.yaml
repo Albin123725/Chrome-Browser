@@ -1,20 +1,74 @@
 services:
   - type: web
-    name: chrome-rdp
+    name: chrome-cloud-rdp
     env: docker
+    region: oregon
     plan: free
     dockerfilePath: ./Dockerfile
+    dockerCommand: ./start.sh
+    dockerContext: .
+    
+    # Auto-generated environment variables
     envVars:
+      # Display settings (auto-detected)
       - key: DISPLAY_WIDTH
         value: "1280"
-      - key: DISPLAY_HEIGHT
+      - key: DISPLAY_HEIGHT  
         value: "720"
+      - key: DISPLAY
+        value: ":99"
+        
+      # Security (auto-generated passwords)
       - key: VNC_PASSWORD
         generateValue: true
+      - key: AUTH_USER
+        value: "admin"
+      - key: AUTH_PASS
+        generateValue: true
+        
+      # Chrome optimization for cloud
+      - key: CHROME_FLAGS
+        value: "--no-sandbox --disable-dev-shm-usage --disable-gpu --remote-debugging-port=9222 --window-size=1280,720 --start-maximized --disable-software-rasterizer --disable-features=VizDisplayCompositor"
+        
+      # Features
       - key: ENABLE_NO_VNC
         value: "true"
+      - key: ENABLE_AUTH
+        value: "true"
+      - key: NO_VNC_PORT
+        value: "80"
+        
+      # Your Colab notebook pre-loaded
+      - key: STARTUP_URL
+        value: "https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing"
+        
+      # Performance optimizations
+      - key: NODE_ENV
+        value: "production"
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "true"
+      - key: CHROMIUM_FLAGS
+        value: "--no-sandbox --disable-setuid-sandbox"
+        
+    # Health check
     healthCheckPath: /health
+    healthCheckTimeout: 10
+    
+    # Auto deployment
     autoDeploy: true
+    branch: main
+    
+    # Build settings
+    buildFilter:
+      paths:
+        - Dockerfile
+        - docker-compose.yml
+        - render.yaml
+        - supervisord.conf
+        - start.sh
+        - nginx.conf
+        
+    # Headers for web access
     headers:
       - path: /*
         name: X-Frame-Options
@@ -22,3 +76,18 @@ services:
       - path: /*
         name: Content-Security-Policy
         value: "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; frame-ancestors *;"
+      - path: /*
+        name: Cache-Control
+        value: "no-cache, no-store, must-revalidate"
+      - path: /*
+        name: X-Content-Type-Options
+        value: "nosniff"
+        
+    # Resource limits (Free tier)
+    resources:
+      memory:
+        limit: 512MB
+        request: 256MB
+      cpu:
+        limit: 1000m
+        request: 500m
