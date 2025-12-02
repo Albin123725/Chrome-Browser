@@ -6,14 +6,19 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 
+// Get the current directory
+const __dirname = path.resolve();
+
 // Middleware
 app.use(compression());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve static files from current directory
+app.use(express.static(__dirname));
 app.use(express.json());
 
 // Serve main HTML file
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Proxy endpoint for bypassing CORS
@@ -25,50 +30,19 @@ app.get('/api/proxy', async (req, res) => {
     }
 
     try {
-        // Fetch the requested URL
         const response = await fetch(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'DNT': '1',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-                'Cache-Control': 'max-age=0'
             },
-            timeout: 10000 // 10 second timeout
+            timeout: 10000
         });
 
-        // Get content type
         const contentType = response.headers.get('content-type') || 'text/html';
-        
-        // Get the HTML content
         let html = await response.text();
         
-        // Fix relative URLs in the HTML
-        const baseUrl = new URL(url);
-        html = html.replace(
-            /(src|href)=["'](?!https?:\/\/)(?!data:)(?!\/\/)([^"']+)["']/gi,
-            (match, attr, value) => {
-                try {
-                    const absoluteUrl = new URL(value, baseUrl).href;
-                    return `${attr}="${absoluteUrl}"`;
-                } catch {
-                    return match;
-                }
-            }
-        );
-
-        // Set appropriate headers
         res.set('Content-Type', contentType);
-        res.set('X-Proxy-Server', 'Web-Browser-App');
-        res.set('X-Original-URL', url);
-        
         res.send(html);
         
     } catch (error) {
@@ -168,9 +142,9 @@ app.get('/health', (req, res) => {
     });
 });
 
-// 404 handler
-app.use((req, res) => {
-    res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+// Serve all other routes with index.html (for SPA)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Error handler
@@ -186,16 +160,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
     console.log(`
     🚀 Web Browser App is running!
-    
     🌐 Local: http://localhost:${PORT}
-    📁 Static files served from: ${path.join(__dirname, 'public')}
-    
-    🔧 Features:
-    - Proxy server for CORS bypass
-    - Search suggestions API
-    - Health monitoring endpoint
-    - Compression enabled
-    
-    ⚠️  Note: Some websites may still block iframe embedding.
+    📁 Files served from: ${__dirname}
     `);
 });
