@@ -1,49 +1,201 @@
 const express = require('express');
 const path = require('path');
+const fetch = require('node-fetch');
+const compression = require('compression');
 const app = express();
+
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(express.static(path.join(__dirname)));
+app.use(compression());
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// Serve the main HTML file
+// Serve main HTML file
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// API endpoint for proxy requests (to bypass CORS)
+// Proxy endpoint for bypassing CORS
 app.get('/api/proxy', async (req, res) => {
-    const url = req.query.url;
+    const url = decodeURIComponent(req.query.url);
     
     if (!url) {
         return res.status(400).json({ error: 'URL parameter is required' });
     }
 
     try {
+        // Fetch the requested URL
         const response = await fetch(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Cache-Control': 'max-age=0'
+            },
+            timeout: 10000 // 10 second timeout
         });
+
+        // Get content type
+        const contentType = response.headers.get('content-type') || 'text/html';
         
-        const contentType = response.headers.get('content-type');
-        const data = await response.text();
+        // Get the HTML content
+        let html = await response.text();
         
+        // Fix relative URLs in the HTML
+        const baseUrl = new URL(url);
+        html = html.replace(
+            /(src|href)=["'](?!https?:\/\/)(?!data:)(?!\/\/)([^"']+)["']/gi,
+            (match, attr, value) => {
+                try {
+                    const absoluteUrl = new URL(value, baseUrl).href;
+                    return `${attr}="${absoluteUrl}"`;
+                } catch {
+                    return match;
+                }
+            }
+        );
+
+        // Set appropriate headers
         res.set('Content-Type', contentType);
-        res.send(data);
+        res.set('X-Proxy-Server', 'Web-Browser-App');
+        res.set('X-Original-URL', url);
+        
+        res.send(html);
+        
     } catch (error) {
-        console.error('Proxy error:', error);
-        res.status(500).json({ error: 'Failed to fetch URL' });
+        console.error('Proxy error:', error.message);
+        
+        // Return error page
+        const errorPage = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Error Loading Page</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        padding: 40px;
+                        text-align: center;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .error-container {
+                        background: rgba(255, 255, 255, 0.1);
+                        backdrop-filter: blur(10px);
+                        padding: 40px;
+                        border-radius: 20px;
+                        max-width: 600px;
+                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+                    }
+                    h1 {
+                        font-size: 48px;
+                        margin-bottom: 20px;
+                    }
+                    p {
+                        font-size: 18px;
+                        margin-bottom: 30px;
+                        opacity: 0.9;
+                    }
+                    .btn {
+                        background: white;
+                        color: #667eea;
+                        padding: 12px 30px;
+                        border-radius: 50px;
+                        text-decoration: none;
+                        font-weight: bold;
+                        display: inline-block;
+                        transition: transform 0.3s;
+                    }
+                    .btn:hover {
+                        transform: translateY(-2px);
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="error-container">
+                    <h1>🚫</h1>
+                    <h1>Unable to Load Page</h1>
+                    <p>${error.message || 'The website might be blocking proxy requests or is temporarily unavailable.'}</p>
+                    <p>Try visiting the site directly or check if the URL is correct.</p>
+                    <a href="/" class="btn">Return to Browser</a>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        res.status(500).send(errorPage);
     }
 });
 
-// Health check endpoint for Render
-app.get('/health', (req, res) => {
-    res.status(200).send('OK');
+// API endpoint for search suggestions
+app.get('/api/search', async (req, res) => {
+    const query = req.query.q;
+    
+    if (!query) {
+        return res.json({ suggestions: [] });
+    }
+    
+    try {
+        const response = await fetch(
+            `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`
+        );
+        const data = await response.json();
+        res.json({ suggestions: data[1] || [] });
+    } catch (error) {
+        res.json({ suggestions: [] });
+    }
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        service: 'web-browser'
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        error: 'Something went wrong!',
+        message: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+});
+
+// Start server
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Open http://localhost:${PORT} to use the browser`);
+    console.log(`
+    🚀 Web Browser App is running!
+    
+    🌐 Local: http://localhost:${PORT}
+    📁 Static files served from: ${path.join(__dirname, 'public')}
+    
+    🔧 Features:
+    - Proxy server for CORS bypass
+    - Search suggestions API
+    - Health monitoring endpoint
+    - Compression enabled
+    
+    ⚠️  Note: Some websites may still block iframe embedding.
+    `);
 });
