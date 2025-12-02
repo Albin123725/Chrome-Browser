@@ -199,3 +199,14 @@ app.listen(PORT, () => {
     💾 Google Colab integration enabled
     `);
 });
+// Add specific MIME types
+app.use(express.static(__dirname, {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.css')) {
+            res.set('Content-Type', 'text/css');
+        }
+        if (path.endsWith('.js')) {
+            res.set('Content-Type', 'application/javascript');
+        }
+    }
+}));
