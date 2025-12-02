@@ -1,212 +1,185 @@
 import express from 'express';
 import path from 'path';
-import fetch from 'node-fetch';
 import { fileURLToPath } from 'url';
 
-// Get __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(express.static(__dirname));
-app.use(express.json());
+// Enable Gzip compression
+import compression from 'compression';
+app.use(compression());
 
-// Fix Colab iframe issues
-function fixColabContent(html) {
-    // Remove X-Frame-Options and Content-Security-Policy headers from HTML
-    html = html.replace(/<meta[^>]*(?:X-Frame-Options|Content-Security-Policy)[^>]*>/gi, '');
-    
-    // Allow iframe embedding
-    html = html.replace(/<head>/i, '<head><meta name="referrer" content="no-referrer">');
-    
-    // Fix relative URLs
-    html = html.replace(/(src|href)=["'](?!https?:\/\/)(?!data:)(?!\/\/)([^"']+)["']/gi, 
-        (match, attr, value) => `${attr}="https://colab.research.google.com${value.startsWith('/') ? '' : '/'}${value}"`);
-    
-    return html;
-}
-
-// Proxy endpoint for bypassing CORS
-app.get('/api/proxy', async (req, res) => {
-    const url = decodeURIComponent(req.query.url);
-    
-    if (!url) {
-        return res.status(400).json({ error: 'URL parameter is required' });
-    }
-
-    try {
-        console.log(`Proxy request for: ${url}`);
-        
-        // Special headers for Colab
-        const headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0'
-        };
-        
-        // Add Colab-specific headers
-        if (url.includes('colab.research.google.com')) {
-            headers['Origin'] = 'https://colab.research.google.com';
-            headers['Referer'] = 'https://colab.research.google.com/';
-            headers['Sec-Fetch-Site'] = 'same-origin';
+// Cache static files for 1 year
+const staticOptions = {
+    maxAge: '1y',
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, filepath) => {
+        const fileExt = path.extname(filepath);
+        if (fileExt === '.html') {
+            res.setHeader('Cache-Control', 'public, max-age=0');
+        } else if (fileExt === '.css' || fileExt === '.js') {
+            res.setHeader('Cache-Control', 'public, max-age=31536000');
         }
-
-        const response = await fetch(url, {
-            headers: headers,
-            timeout: 15000 // Longer timeout for Colab
-        });
-
-        const contentType = response.headers.get('content-type') || 'text/html';
-        let html = await response.text();
-        
-        // Fix Colab iframe issues
-        if (url.includes('colab.research.google.com')) {
-            html = fixColabContent(html);
-        }
-        
-        res.set('Content-Type', contentType);
-        res.set('X-Frame-Options', 'ALLOW-FROM https://chrome-browser-4ct2.onrender.com');
-        res.set('Access-Control-Allow-Origin', '*');
-        res.send(html);
-        
-    } catch (error) {
-        console.error('Proxy error:', error.message);
-        
-        // Return error page
-        const errorPage = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Error Loading Page</title>
-                <style>
-                    body {
-                        font-family: Arial, sans-serif;
-                        padding: 40px;
-                        text-align: center;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        color: white;
-                        min-height: 100vh;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                    }
-                    .error-container {
-                        background: rgba(255, 255, 255, 0.1);
-                        backdrop-filter: blur(10px);
-                        padding: 40px;
-                        border-radius: 20px;
-                        max-width: 600px;
-                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-                    }
-                    h1 {
-                        font-size: 48px;
-                        margin-bottom: 20px;
-                    }
-                    p {
-                        font-size: 18px;
-                        margin-bottom: 30px;
-                        opacity: 0.9;
-                    }
-                    .btn {
-                        background: white;
-                        color: #667eea;
-                        padding: 12px 30px;
-                        border-radius: 50px;
-                        text-decoration: none;
-                        font-weight: bold;
-                        display: inline-block;
-                        transition: transform 0.3s;
-                    }
-                    .btn:hover {
-                        transform: translateY(-2px);
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="error-container">
-                    <h1>🚫</h1>
-                    <h1>Unable to Load Page</h1>
-                    <p>${error.message || 'The website might be blocking proxy requests or is temporarily unavailable.'}</p>
-                    <p>Try visiting the site directly or check if the URL is correct.</p>
-                    <a href="/" class="btn">Return to Browser</a>
-                </div>
-            </body>
-            </html>
-        `;
-        
-        res.status(500).send(errorPage);
     }
+};
+
+// Serve static files with caching
+app.use(express.static(__dirname, staticOptions));
+
+// Preload critical resources
+app.use((req, res, next) => {
+    if (req.url === '/') {
+        res.setHeader('Link', '</style.css>; rel=preload; as=style, </script.js>; rel=preload; as=script');
+    }
+    next();
 });
 
-// API endpoint for search suggestions
-app.get('/api/search', async (req, res) => {
-    const query = req.query.q;
-    
-    if (!query) {
-        return res.json({ suggestions: [] });
-    }
-    
-    try {
-        const response = await fetch(
-            `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`
-        );
-        const data = await response.json();
-        res.json({ suggestions: data[1] || [] });
-    } catch (error) {
-        res.json({ suggestions: [] });
-    }
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        service: 'web-browser',
-        version: '1.0.0'
-    });
-});
-
-// Serve main HTML file
+// Inline critical CSS for first paint
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    const criticalCSS = `
+        <style>
+            *{margin:0;padding:0;box-sizing:border-box}
+            body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#fff;height:100vh;overflow:hidden}
+            .browser-container{display:flex;flex-direction:column;height:100vh}
+            .window-controls{background:#1a1a1a;padding:6px 12px;display:flex;align-items:center}
+            .window-buttons{display:flex;gap:6px}
+            .window-btn{width:12px;height:12px;border-radius:50%;border:none}
+            .window-btn.close{background:#ff5f57}
+            .window-btn.minimize{background:#ffbd2e}
+            .window-btn.maximize{background:#28ca42}
+            .browser-header{background:#161b22;padding:8px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #30363d}
+            .nav-controls{display:flex;gap:4px}
+            .nav-btn{background:#21262d;border:none;color:#8b949e;width:32px;height:32px;border-radius:6px;cursor:pointer}
+            .url-container{flex:1}
+            .url-input-wrapper{background:#0d1117;border:1px solid #30363d;border-radius:20px;padding:6px 12px;display:flex;align-items:center}
+            #url-bar{background:none;border:none;color:#fff;flex:1;font-size:14px;outline:none}
+            .bookmarks-bar{background:#161b22;padding:4px;border-bottom:1px solid #30363d}
+            .bookmarks-container{display:flex;gap:6px}
+            .bookmark{background:#21262d;border:none;color:#c9d1d9;padding:4px 12px;border-radius:12px;font-size:12px;cursor:pointer}
+            .tabs-container{background:#161b22;padding:0 8px;border-bottom:1px solid #30363d}
+            .tab{background:#21262d;border:1px solid #30363d;border-radius:6px 6px 0 0;padding:6px 12px;margin-right:2px;cursor:pointer;min-width:120px}
+            .tab.active{background:#0d1117;border-bottom:none}
+            .main-content{flex:1;position:relative}
+            .new-tab-page{position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#0d1117 0%,#161b22 100%);display:flex;flex-direction:column;align-items:center;justify-content:center}
+            .ntp-logo{text-align:center;margin-bottom:30px}
+            .ntp-logo i{font-size:48px;color:#58a6ff}
+            .ntp-search-box{background:#21262d;border:2px solid #30363d;border-radius:24px;padding:12px 20px;width:90%;max-width:600px;display:flex;align-items:center}
+            #ntp-search{background:none;border:none;color:#fff;flex:1;font-size:16px;outline:none}
+            .status-bar{background:#161b22;padding:6px 12px;display:flex;justify-content:space-between;font-size:11px;color:#8b949e}
+            .webview-container{position:absolute;top:0;left:0;right:0;bottom:0}
+            .webview{width:100%;height:100%;border:none;background:#fff}
+            @media(max-width:768px){.browser-header{flex-wrap:wrap}.url-container{order:3;flex:100%;margin-top:8px}}
+        </style>
+    `;
+    
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Chrome Browser</title>
+            ${criticalCSS}
+            <link rel="stylesheet" href="style.css" media="print" onload="this.media='all'">
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+            <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>">
+            <noscript><link rel="stylesheet" href="style.css"></noscript>
+        </head>
+        <body>
+            <div class="browser-container">
+                <div class="window-controls">
+                    <div class="window-buttons">
+                        <button class="window-btn close"></button>
+                        <button class="window-btn minimize"></button>
+                        <button class="window-btn maximize"></button>
+                    </div>
+                </div>
+                
+                <div class="browser-header">
+                    <div class="nav-controls">
+                        <button class="nav-btn" title="Back"><i class="fas fa-arrow-left"></i></button>
+                        <button class="nav-btn" title="Forward"><i class="fas fa-arrow-right"></i></button>
+                        <button class="nav-btn" title="Reload"><i class="fas fa-redo"></i></button>
+                    </div>
+                    
+                    <div class="url-container">
+                        <div class="url-input-wrapper">
+                            <i class="fas fa-search" style="color:#8b949e;margin-right:8px"></i>
+                            <input type="text" id="url-bar" placeholder="Type URL or search..." autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bookmarks-bar">
+                    <div class="bookmarks-container">
+                        <button class="bookmark">Google</button>
+                        <button class="bookmark">YouTube</button>
+                        <button class="bookmark">GitHub</button>
+                        <button class="bookmark">Colab</button>
+                    </div>
+                </div>
+                
+                <div class="tabs-container">
+                    <div class="tab active">New Tab</div>
+                </div>
+                
+                <div class="main-content">
+                    <div class="new-tab-page active">
+                        <div class="ntp-logo">
+                            <i class="fas fa-bolt"></i>
+                            <h1 style="margin:10px 0;font-size:32px">Fast Browser</h1>
+                            <p style="color:#8b949e">Loading...</p>
+                        </div>
+                        <div class="ntp-search-box">
+                            <i class="fas fa-search" style="color:#8b949e;margin-right:12px"></i>
+                            <input type="text" id="ntp-search" placeholder="Search or enter website address">
+                        </div>
+                    </div>
+                    <div class="webview-container"></div>
+                </div>
+                
+                <div class="status-bar">
+                    <div>Ready</div>
+                    <div>Fast Mode</div>
+                </div>
+            </div>
+            
+            <script>
+                // Load remaining scripts after page is visible
+                window.addEventListener('load', function() {
+                    var script = document.createElement('script');
+                    script.src = 'script.js';
+                    script.async = true;
+                    document.body.appendChild(script);
+                    
+                    // Show page immediately
+                    document.querySelector('.ntp-logo p').textContent = 'Fast Chrome-like Browser';
+                });
+            </script>
+        </body>
+        </html>
+    `);
 });
 
-// Serve all other routes with index.html (for SPA)
+// Health check
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
+// Serve all other routes
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`
-    🚀 Web Browser App is running!
-    🌐 URL: https://chrome-browser-4ct2.onrender.com
-    📁 Files served from: ${__dirname}
-    🔧 Proxy server active
-    💾 Google Colab integration enabled
-    `);
+// Start optimized server
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Fast Browser running on port ${PORT}`);
+    console.log(`⚡ Optimized for maximum speed`);
 });
-// Add specific MIME types
-app.use(express.static(__dirname, {
-    setHeaders: (res, path) => {
-        if (path.endsWith('.css')) {
-            res.set('Content-Type', 'text/css');
-        }
-        if (path.endsWith('.js')) {
-            res.set('Content-Type', 'application/javascript');
-        }
-    }
-}));
