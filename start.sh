@@ -21,7 +21,6 @@ sleep 1
 
 # Start VNC Server (x11vnc)
 echo "Starting VNC server on localhost:${VNC_PORT} with -ncache 10..."
-# Added -ncache 10 for performance
 x11vnc -display :99 -forever -shared -nopw -listen localhost -xkb -ncache 10 & 
 sleep 2
 
@@ -35,9 +34,11 @@ google-chrome-stable \
     "https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing" &
 sleep 5
 
-# Start noVNC/websockify (Serves /usr/share/novnc and proxies to VNC)
+# Start noVNC/websockify 
 echo "Starting websockify (noVNC server) on port ${WEB_PORT}..."
-websockify --web /usr/share/novnc/ ${WEB_PORT} localhost:${VNC_PORT}
+# CRITICAL FIX: Use the --no-logo and --daemon flags (if possible, though daemon is usually avoided in Docker)
+# More importantly, we use the -D flag to set vnc_auto.html as the default file served for '/'
+websockify --web /usr/share/novnc/ **-D vnc_auto.html** ${WEB_PORT} localhost:${VNC_PORT}
 
 echo "=========================================="
 echo "✅ Chrome RDP is READY! Access on port ${WEB_PORT}"
