@@ -4,12 +4,14 @@ echo "=========================================="
 echo "🚀 Starting Chrome Cloud RDP"
 echo "=========================================="
 
-# Set environment variables from Dockerfile
+# Set environment variables
 export DISPLAY=:99
 export DISPLAY_WIDTH=1280
 export DISPLAY_HEIGHT=720
 export WEB_PORT=80
 export VNC_PORT=5900
+# FIX: Suppress DBus and other Chrome errors
+export DBUS_SESSION_BUS_ADDRESS=/dev/null 
 
 # Start X Virtual Framebuffer
 echo "Starting Xvfb on display ${DISPLAY}..."
@@ -22,8 +24,9 @@ fluxbox &
 sleep 1
 
 # Start VNC Server (x11vnc)
-echo "Starting VNC server on localhost:${VNC_PORT}..."
-x11vnc -display :99 -forever -shared -nopw -listen localhost -xkb &
+echo "Starting VNC server on localhost:${VNC_PORT} with -ncache 10..."
+# FIX: Added -ncache 10 for performance
+x11vnc -display :99 -forever -shared -nopw -listen localhost -xkb -ncache 10 & 
 sleep 2
 
 # Start Chrome Browser
@@ -38,8 +41,6 @@ sleep 5
 
 # Start noVNC/websockify (Serves /usr/share/novnc and proxies to VNC)
 echo "Starting websockify (noVNC server) on port ${WEB_PORT}..."
-# The websockify command serves the VNC client files from /usr/share/novnc on port 80 
-# and connects to the VNC server on localhost:5900.
 websockify --web /usr/share/novnc/ ${WEB_PORT} localhost:${VNC_PORT}
 
 echo "=========================================="
