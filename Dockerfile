@@ -8,13 +8,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     VNC_PORT=5900 \
     WEB_PORT=80
 
-# FIX: Correct flag placement. Use --no-install-suggests as an option, not a package name.
+# FIX: Combine all flags and packages onto a single line to ensure correct shell parsing
 RUN apt-get update && \
-    apt-get install -y \
-    --no-install-recommends \
-    --allow-unauthenticated \
-    **--no-install-suggests** \
-    wget gnupg ca-certificates xvfb x11vnc fluxbox novnc websockify net-tools curl **git** \
+    apt-get install -y --no-install-recommends --allow-unauthenticated **--no-install-suggests** wget gnupg ca-certificates xvfb x11vnc fluxbox novnc websockify net-tools curl **git** \
     && rm -rf /var/lib/apt/lists/*
 
 # Remove any remnants of nginx (CRITICAL FIX for "Welcome to nginx!")
