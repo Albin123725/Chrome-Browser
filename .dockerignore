@@ -1,39 +1,6 @@
-# Git
 .git
 .gitignore
-.gitattributes
-
-# Node
-node_modules
-npm-debug.log
-yarn-debug.log
-yarn-error.log
-
-# Editor
-.vscode
-.idea
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Build
-dist
-build
-*.tar.gz
-*.zip
-
-# Logs
+README.md
 *.log
-logs
-
-# Temp
-tmp
-temp
-
-# Environment
-.env
-.env.local
-.env.production
+*.tmp
+node_modules/
