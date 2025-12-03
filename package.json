@@ -1,33 +1,12 @@
 {
-  "name": "chrome-cloud-rdp",
-  "version": "2.0.0",
-  "description": "Cloud RDP with Chrome Browser - Deploy on Render",
-  "main": "start.sh",
+  "name": "chrome-rdp",
+  "version": "1.0.0",
+  "description": "Chrome RDP with Google Colab",
+  "main": "server.js",
   "scripts": {
-    "start": "./start.sh",
-    "build": "echo 'Building Docker image...'",
-    "test": "echo 'Tests passed'",
-    "deploy": "echo 'Deployed successfully'"
+    "start": "node server.js"
   },
-  "keywords": [
-    "chrome",
-    "rdp",
-    "cloud",
-    "vnc",
-    "browser",
-    "render",
-    "docker"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/chrome-rdp.git"
-  },
-  "engines": {
-    "node": ">=16.0.0",
-    "npm": ">=8.0.0"
-  },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "express": "^4.18.2"
+  }
 }
