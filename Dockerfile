@@ -1,6 +1,6 @@
 FROM ubuntu:22.04
 
-# Set environment variables for non-interactive install and display setup
+# ... (Environment variables remain the same) ...
 ENV DEBIAN_FRONTEND=noninteractive \
     DEBCONF_NONINTERACTIVE_SEEN=true \
     DISPLAY=:99 \
@@ -10,12 +10,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WEB_PORT=80 \
     DBUS_SESSION_BUS_ADDRESS=/dev/null 
 
-# FIX: Stable installation command: Uses standard flags to prevent conflicts 
-# like the Git daemons without using unstable combinations.
+# FIX: Added x11-utils to fix 'xmessage: not found' warning.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends --allow-unauthenticated wget gnupg ca-certificates xvfb x11vnc fluxbox novnc websockify net-tools curl git \
+    apt-get install -y --no-install-recommends --allow-unauthenticated wget gnupg ca-certificates xvfb x11vnc fluxbox novnc websockify net-tools curl git **x11-utils** \
     && rm -rf /var/lib/apt/lists/*
-
+    
+# ... (Rest of Dockerfile remains the same) ...
 # Remove any remnants of nginx (CRITICAL FIX for "Welcome to nginx!")
 RUN apt-get remove -y nginx* || true && \
     apt-get autoremove -y && \
