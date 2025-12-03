@@ -1,42 +1,35 @@
 FROM ubuntu:22.04
 
-# Set timezone automatically to avoid prompts
+# Set environment to avoid prompts
 ENV DEBIAN_FRONTEND=noninteractive \
-    TZ=Etc/UTC
+    TZ=UTC \
+    DISPLAY=:99
 
-# Install all dependencies without prompts
+# Set timezone automatically
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Install all dependencies
 RUN apt-get update && apt-get install -y \
-    tzdata \
     wget \
     gnupg \
+    ca-certificates \
     xvfb \
     x11vnc \
     fluxbox \
     novnc \
     websockify \
+    net-tools \
     curl \
-    nodejs \
-    npm \
-    && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
-    && echo $TZ > /etc/timezone \
-    && dpkg-reconfigure --frontend noninteractive tzdata
-
-# Install Google Chrome
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy files
+# Copy startup script
 COPY start.sh /start.sh
-COPY server.js /server.js
-COPY package.json /package.json
+RUN chmod +x /start.sh
 
-# Set permissions
-RUN chmod +x /start.sh \
-    && npm install
-
-EXPOSE 3000 80
+EXPOSE 80
 
 CMD ["/start.sh"]
