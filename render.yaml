@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: chrome-vnc
+    name: chrome-colab-rdp
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
@@ -10,3 +10,11 @@ services:
     envVars:
       - key: VNC_PASSWORD
         value: "chrome123"
+      - key: DISPLAY_WIDTH
+        value: "1280"
+      - key: DISPLAY_HEIGHT
+        value: "720"
+    disk:
+      name: chrome-data
+      mountPath: /tmp/chrome-data
+      sizeGB: 1
