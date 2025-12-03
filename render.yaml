@@ -1,12 +1,25 @@
 services:
   - type: web
-    name: chrome-rdp-working
+    name: chrome-rdp-ultimate
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
     port: 80
-    healthCheckPath: /health
-    autoDeploy: true
+    
     envVars:
       - key: VNC_PASSWORD
-        value: "chrome123"
+        generateValue: true
+      - key: DISPLAY_WIDTH
+        value: "1280"
+      - key: DISPLAY_HEIGHT
+        value: "720"
+    
+    healthCheckPath: /health.html
+    healthCheckTimeout: 10
+    
+    autoDeploy: true
+    
+    disk:
+      name: chrome-data
+      mountPath: /data
+      sizeGB: 1
