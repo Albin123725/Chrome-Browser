@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: chrome-rdp-working
+    name: chrome-rdp-final
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
     port: 80
-    healthCheckPath: /health
+    healthCheckPath: /
     autoDeploy: true
