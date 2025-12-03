@@ -8,9 +8,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     VNC_PORT=5900 \
     WEB_PORT=80
 
-# Install system dependencies (including git to fix the clone error)
-RUN apt-get update && apt-get install -y \
-    wget gnupg ca-certificates xvfb x11vnc fluxbox novnc websockify net-tools curl **git** \
+# Install system dependencies (including git)
+# FIX: Use --no-install-recommends to resolve dependency conflicts (exit code 100)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget gnupg ca-certificates xvfb x11vnc fluxbox novnc websockify net-tools curl git \
     && rm -rf /var/lib/apt/lists/*
 
 # Remove any remnants of nginx (CRITICAL FIX for "Welcome to nginx!")
@@ -19,12 +20,13 @@ RUN apt-get remove -y nginx* || true && \
     rm -f /etc/nginx/nginx.conf
 
 # Install Google Chrome
+# FIX: Also use --no-install-recommends here for stability/smaller image
 RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
     && apt-get update && apt-get install -y --no-install-recommends google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy startup script and make it executable (CRITICAL FIX for permissions)
+# Copy startup script and make it executable
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
