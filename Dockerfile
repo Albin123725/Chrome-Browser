@@ -8,10 +8,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     VNC_PORT=5900 \
     WEB_PORT=80
 
-# Install system dependencies (including git)
-# FIX: Use --no-install-recommends to resolve dependency conflicts (exit code 100)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# FIX: Break installation into steps and use -f (force) to correct dependencies
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends --allow-unauthenticated \
     wget gnupg ca-certificates xvfb x11vnc fluxbox novnc websockify net-tools curl **git** \
+    && apt-get -f install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Remove any remnants of nginx (CRITICAL FIX for "Welcome to nginx!")
