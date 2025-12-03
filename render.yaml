@@ -1,20 +1,9 @@
 services:
   - type: web
-    name: chrome-colab-rdp
+    name: chrome-rdp-working
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
     port: 80
     healthCheckPath: /health
     autoDeploy: true
-    envVars:
-      - key: VNC_PASSWORD
-        value: "chrome123"
-      - key: DISPLAY_WIDTH
-        value: "1280"
-      - key: DISPLAY_HEIGHT
-        value: "720"
-    disk:
-      name: chrome-data
-      mountPath: /tmp/chrome-data
-      sizeGB: 1
