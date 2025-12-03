@@ -1,42 +1,48 @@
-FROM ubuntu:22.04
+#!/bin/bash
 
-# ... (Environment variables remain the same) ...
-ENV DEBIAN_FRONTEND=noninteractive \
-    DEBCONF_NONINTERACTIVE_SEEN=true \
-    DISPLAY=:99 \
-    DISPLAY_WIDTH=1280 \
-    DISPLAY_HEIGHT=720 \
-    VNC_PORT=5900 \
-    WEB_PORT=80 \
-    DBUS_SESSION_BUS_ADDRESS=/dev/null 
+echo "=========================================="
+echo "🚀 Starting Chrome Cloud RDP"
+echo "=========================================="
 
-# FIX: Added x11-utils to fix 'xmessage: not found' warning.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends --allow-unauthenticated wget gnupg ca-certificates xvfb x11vnc fluxbox novnc websockify net-tools curl git **x11-utils** \
-    && rm -rf /var/lib/apt/lists/*
-    
-# ... (Rest of Dockerfile remains the same) ...
-# Remove any remnants of nginx (CRITICAL FIX for "Welcome to nginx!")
-RUN apt-get remove -y nginx* || true && \
-    apt-get autoremove -y && \
-    rm -f /etc/nginx/nginx.conf
+# Environment variables are mostly set in the Dockerfile
+export DISPLAY=:99
+export VNC_PORT=5900
+export WEB_PORT=80
 
-# Install Google Chrome
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
-    && apt-get update && apt-get install -y --no-install-recommends google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
+# Start X Virtual Framebuffer
+echo "Starting Xvfb on display ${DISPLAY}..."
+Xvfb :99 -screen 0 ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}x24 -ac -noreset &
+sleep 2
 
-# Copy startup script and make it executable
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+# Start Window Manager
+echo "Starting Fluxbox..."
+fluxbox &
+sleep 1
 
-# Expose the web port
-EXPOSE ${WEB_PORT}
+# Start VNC Server (x11vnc)
+echo "Starting VNC server on localhost:${VNC_PORT} with -ncache 10..."
+x11vnc -display :99 -forever -shared -nopw -listen localhost -xkb -ncache 10 & 
+sleep 2
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost/ || exit 1
+# Start Chrome Browser
+echo "Starting Chrome with Google Colab..."
+google-chrome-stable \
+    --no-sandbox \
+    --disable-dev-shm-usage \
+    --window-size=${DISPLAY_WIDTH},${DISPLAY_HEIGHT} \
+    --start-maximized \
+    "https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing" &
+sleep 5
 
-# Start the service
-CMD ["/start.sh"]
+# Start noVNC/websockify 
+echo "Starting websockify (noVNC server) on port ${WEB_PORT}..."
+# CRITICAL FIX: Use the --no-logo and --daemon flags (if possible, though daemon is usually avoided in Docker)
+# More importantly, we use the -D flag to set vnc_auto.html as the default file served for '/'
+websockify --web /usr/share/novnc/ **-D vnc_auto.html** ${WEB_PORT} localhost:${VNC_PORT}
+
+echo "=========================================="
+echo "✅ Chrome RDP is READY! Access on port ${WEB_PORT}"
+echo "=========================================="
+
+# Keep the container running
+wait
