@@ -8,9 +8,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     VNC_PORT=5900 \
     WEB_PORT=80
 
-# FIX: Combine update and install, use aggressive flags to ignore conflicts
+# FIX: Correct flag placement. Use --no-install-suggests as an option, not a package name.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends --allow-unauthenticated **--no-install-suggests** \
+    apt-get install -y \
+    --no-install-recommends \
+    --allow-unauthenticated \
+    **--no-install-suggests** \
     wget gnupg ca-certificates xvfb x11vnc fluxbox novnc websockify net-tools curl **git** \
     && rm -rf /var/lib/apt/lists/*
 
