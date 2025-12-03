@@ -24,21 +24,29 @@ rm -rf /tmp/.X11-unix /tmp/.X0-lock
 mkdir -p /tmp/.X11-unix
 chmod 1777 /tmp/.X11-unix
 
+# Start DBUS to suppress Chrome errors
+mkdir -p /run/dbus
+dbus-daemon --system --fork 2>/dev/null || true
+
 # Start Xvfb
 echo "Starting Xvfb..."
 Xvfb :99 -screen 0 ${WIDTH}x${HEIGHT}x24 -ac +extension GLX +render -noreset &
-sleep 2
+sleep 3
+
+# Set display
+export DISPLAY=:99
+
+# Fix X11 auth
+touch /root/.Xauthority
+xauth generate :99 . trusted
+xhost +local: 2>/dev/null || true
 
 # Start fluxbox
 echo "Starting window manager..."
 fluxbox &
-sleep 1
+sleep 2
 
-# Fix X11 auth - IMPORTANT!
-xauth generate :99 . trusted
-xhost +local:
-
-# Start VNC with auth fix
+# Start VNC
 echo "Starting VNC server..."
 if [ "$VNC_PASSWORD" != "chrome123" ]; then
     mkdir -p ~/.vnc
@@ -47,137 +55,139 @@ if [ "$VNC_PASSWORD" != "chrome123" ]; then
 else
     x11vnc -display :99 -forever -shared -nopw -listen localhost -auth guess &
 fi
-sleep 2
+sleep 3
 
-# Start Chrome (no sudo needed)
+# Start Chrome with DBUS errors suppressed
 echo "Starting Chrome with Google Colab..."
 google-chrome-stable \
     --no-sandbox \
     --disable-dev-shm-usage \
     --disable-gpu \
+    --disable-software-rasterizer \
+    --disable-extensions \
+    --disable-background-networking \
+    --disable-sync \
+    --disable-default-apps \
+    --disable-translate \
+    --disable-features=site-per-process,TranslateUI,BlinkGenPropertyTrees \
     --window-size=${WIDTH},${HEIGHT} \
+    --window-position=0,0 \
     --start-maximized \
     --user-data-dir=/home/chrome/.config/google-chrome \
     --no-first-run \
     --no-default-browser-check \
-    "https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing" &
+    --disable-component-update \
+    --disable-breakpad \
+    "https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing" > /dev/null 2>&1 &
 CHROME_PID=$!
 sleep 5
 
 # Verify Chrome
-if ps -p $CHROME_PID > /dev/null; then
+if ps -p $CHROME_PID > /dev/null 2>&1; then
     echo "✅ Chrome started (PID: $CHROME_PID)"
 else
-    echo "⚠️ Chrome may have issues, but continuing..."
+    echo "⚠️ Chrome may have issues, trying alternative method..."
+    # Try without some flags
+    google-chrome-stable \
+        --no-sandbox \
+        --disable-dev-shm-usage \
+        "https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1?usp=sharing" &
+    sleep 5
 fi
 
-# Start noVNC
-echo "Starting noVNC..."
-cd /usr/share/novnc
-./utils/novnc_proxy --vnc localhost:5900 --listen 80 &
+# Start noVNC properly
+echo "Starting noVNC web interface..."
+cd /opt/noVNC
 
-# Create health check
-echo "OK" > /usr/share/novnc/health.html
+# Create a simple launcher script for noVNC
+cat > /tmp/start_novnc.sh << 'EOF'
+#!/bin/bash
+cd /opt/noVNC
+python3 ./utils/novnc_proxy --vnc localhost:5900 --listen 0.0.0.0:80
+EOF
+chmod +x /tmp/start_novnc.sh
 
-# Create simple status page
-cat > /usr/share/novnc/index.html << 'EOF'
+# Start noVNC in background
+/tmp/start_novnc.sh > /var/log/novnc.log 2>&1 &
+NOVNC_PID=$!
+sleep 3
+
+# Verify noVNC is running
+if ps -p $NOVNC_PID > /dev/null 2>&1; then
+    echo "✅ noVNC started (PID: $NOVNC_PID)"
+else
+    echo "⚠️ Starting alternative noVNC method..."
+    # Alternative method
+    cd /opt/noVNC/utils/websockify
+    python3 -m websockify --web /opt/noVNC 80 localhost:5900 &
+fi
+
+# Create simple redirect page
+cat > /opt/noVNC/redirect.html << 'EOF'
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Chrome RDP - Ready!</title>
+    <title>Chrome RDP - Loading...</title>
+    <meta http-equiv="refresh" content="3;url=/vnc_lite.html">
     <style>
         body {
             font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            background: #0d1117;
             color: white;
             margin: 0;
-            padding: 20px;
-            min-height: 100vh;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
             text-align: center;
-            padding: 40px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 15px;
-            border: 1px solid #30363d;
         }
-        h1 {
-            color: #58a6ff;
-            font-size: 2.5em;
-            margin-bottom: 20px;
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #58a6ff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
         }
-        .btn {
-            display: inline-block;
-            background: #238636;
-            color: white;
-            padding: 15px 30px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: bold;
-            margin: 10px;
-            border: none;
-            cursor: pointer;
-            font-size: 1.1em;
-        }
-        .btn:hover {
-            background: #2ea043;
-        }
-        .status {
-            background: rgba(88, 166, 255, 0.1);
-            padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
-            border-left: 4px solid #58a6ff;
-        }
-        .url-box {
-            background: rgba(255, 165, 0, 0.1);
-            border: 1px solid #FFA500;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 20px 0;
-            font-family: monospace;
-            word-break: break-all;
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🌐 Chrome Cloud RDP</h1>
-        <p>Your browser with Google Colab is ready!</p>
-        
-        <div class="status">
-            <p><strong>✅ System Status:</strong> Online</p>
-            <p><strong>🔑 VNC Password:</strong> chrome123</p>
-            <p><strong>🖥️ Display:</strong> 1280x720</p>
-        </div>
-        
-        <div class="url-box">
-            <strong>Your Colab Notebook:</strong><br>
-            https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1
-        </div>
-        
-        <a href="/vnc_lite.html" class="btn">🚀 Connect to VNC</a>
-        <a href="https://colab.research.google.com/drive/1jckV8xUJSmLhhol6wZwVJzpybsimiRw1" 
-           target="_blank" class="btn" style="background: #FFA500;">
-           📒 Open Colab Directly
-        </a>
-        
-        <p style="margin-top: 30px; color: #8b949e;">
-            After connecting via VNC, you'll see Chrome with your notebook already loaded.
-        </p>
+    <div>
+        <div class="loader"></div>
+        <h1>Chrome RDP</h1>
+        <p>Redirecting to VNC client...</p>
+        <p>If not redirected in 5 seconds, <a href="/vnc_lite.html">click here</a></p>
     </div>
 </body>
 </html>
 EOF
 
+# Create health check
+echo "OK" > /opt/noVNC/health.html
+
+# Copy vnc_lite.html to root
+if [ -f /opt/noVNC/vnc_lite.html ]; then
+    cp /opt/noVNC/vnc_lite.html /opt/noVNC/index.html
+fi
+
 echo "=========================================="
 echo "✅ Setup Complete!"
-echo "🌐 Access: http://localhost"
-echo "🔗 VNC: http://localhost/vnc_lite.html"
-echo "📒 Colab: Pre-loaded in Chrome"
+echo "🌐 Access: https://$(hostname)"
+echo "🔗 Direct VNC: /vnc_lite.html"
+echo "🔑 VNC Password: $VNC_PASSWORD (or leave blank)"
+echo "📒 Your Colab is pre-loaded in Chrome"
 echo "=========================================="
 
-# Keep container running
-tail -f /dev/null
+# Show connection URL
+echo ""
+echo "📡 Waiting for connections..."
+echo ""
+
+# Keep container running and show logs
+tail -f /var/log/novnc.log 2>/dev/null || sleep infinity
