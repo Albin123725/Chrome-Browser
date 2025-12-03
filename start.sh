@@ -4,14 +4,10 @@ echo "=========================================="
 echo "🚀 Starting Chrome Cloud RDP"
 echo "=========================================="
 
-# Set environment variables
+# Environment variables are mostly set in the Dockerfile
 export DISPLAY=:99
-export DISPLAY_WIDTH=1280
-export DISPLAY_HEIGHT=720
-export WEB_PORT=80
 export VNC_PORT=5900
-# FIX: Suppress DBus and other Chrome errors
-export DBUS_SESSION_BUS_ADDRESS=/dev/null 
+export WEB_PORT=80
 
 # Start X Virtual Framebuffer
 echo "Starting Xvfb on display ${DISPLAY}..."
@@ -25,7 +21,7 @@ sleep 1
 
 # Start VNC Server (x11vnc)
 echo "Starting VNC server on localhost:${VNC_PORT} with -ncache 10..."
-# FIX: Added -ncache 10 for performance
+# Added -ncache 10 for performance
 x11vnc -display :99 -forever -shared -nopw -listen localhost -xkb -ncache 10 & 
 sleep 2
 
